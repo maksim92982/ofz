@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Калькулятор ОФЗ с реинвестированием</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d9cfd;
+      --ok: #4ade80;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 1.5rem;
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin: 0 0 0.25rem;
+    }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .grid {
+      display: grid;
+      gap: 1rem;
+      max-width: 720px;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input, button {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 1rem;
+    }
+    input:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    button {
+      margin-top: 0.5rem;
+      cursor: pointer;
+      font-weight: 600;
+      background: #1e4a7a;
+      border-color: #2d6ab0;
+    }
+    button:hover { filter: brightness(1.08); }
+    .row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+    .result {
+      margin-top: 1.75rem;
+      padding: 1rem 1.25rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .result strong { color: var(--ok); font-size: 1.25rem; }
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+    th, td {
+      padding: 0.45rem 0.5rem;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 500; }
+    .wrap-table { overflow-x: auto; max-width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>ОФЗ: погашение и реинвестирование купонов</h1>
+  <p class="sub">
+    Цена к номиналу растёт линейно: каждые полгода + (номинал − текущая цена) / число выплат.
+    Купоны после каждой выплаты (кроме последней) реинвестируются в ту же ОФЗ по рыночной цене на эту дату.
+  </p>
+
+  <div class="grid">
+    <div>
+      <label for="price">Текущая цена одной облигации, ₽</label>
+      <input id="price" type="number" step="0.01" min="0.01" value="920" />
+    </div>
+    <div>
+      <label for="nominal">Номинал одной облигации, ₽</label>
+      <input id="nominal" type="number" step="0.01" min="0.01" value="1000" />
+    </div>
+    <div class="row2">
+      <div>
+        <label for="start">Дата покупки (сегодня)</label>
+        <input id="start" type="date" />
+      </div>
+      <div>
+        <label for="maturity">Дата погашения</label>
+        <input id="maturity" type="date" />
+      </div>
+    </div>
+    <div>
+      <label for="invest">Сумма покупки сейчас, ₽</label>
+      <input id="invest" type="number" step="0.01" min="0.01" value="100000" />
+    </div>
+    <div>
+      <label for="coupon">Купон на одну облигацию за полгода, ₽</label>
+      <input id="coupon" type="number" step="0.01" min="0" value="35" />
+    </div>
+    <button type="button" id="calc">Рассчитать</button>
+  </div>
+
+  <div class="result" id="out" hidden>
+    <div>Число полугодовых выплат до погашения: <strong id="nPay"></strong></div>
+    <div style="margin-top:0.75rem">Ожидаемая сумма к погашению (купон за последнее полугодие + номинал по всем бумагам): <strong id="total"></strong> ₽</div>
+    <div class="hint" id="detail"></div>
+    <div class="wrap-table" id="tableWrap"></div>
+  </div>
+
+  <script>
+    (function () {
+      const MS_HALF_YEAR = (365.25 / 2) * 24 * 60 * 60 * 1000;
+
+      function periodsBetween(start, maturity) {
+        const diff = maturity.getTime() - start.getTime();
+        if (diff <= 0) return 0;
+        return Math.ceil(diff / MS_HALF_YEAR);
+      }
+
+      function formatMoney(x) {
+        return x.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function run() {
+        const P0 = parseFloat(document.getElementById("price").value);
+        const F = parseFloat(document.getElementById("nominal").value);
+        const invest = parseFloat(document.getElementById("invest").value);
+        const c = parseFloat(document.getElementById("coupon").value);
+        const startStr = document.getElementById("start").value;
+        const matStr = document.getElementById("maturity").value;
+
+        const out = document.getElementById("out");
+        if (!startStr || !matStr) {
+          alert("Укажите дату покупки и дату погашения.");
+          return;
+        }
+        const start = new Date(startStr + "T12:00:00");
+        const maturity = new Date(matStr + "T12:00:00");
+        const n = periodsBetween(start, maturity);
+
+        if (![P0, F, invest, c].every((v) => Number.isFinite(v)) || P0 <= 0 || F <= 0 || invest <= 0) {
+          alert("Проверьте цену, номинал и сумму покупки.");
+          return;
+        }
+        if (c < 0 || !Number.isFinite(c)) {
+          alert("Купон не может быть отрицательным.");
+          return;
+        }
+        if (n < 1) {
+          alert("До погашения меньше одного полугодия — увеличьте срок или проверьте даты.");
+          return;
+        }
+
+        const priceStep = (F - P0) / n;
+        function priceAtPeriodEnd(k) {
+          return P0 + k * priceStep;
+        }
+
+        let bonds = invest / P0;
+        const rows = [];
+
+        for (let k = 1; k <= n; k++) {
+          const Pk = priceAtPeriodEnd(k);
+          const couponTotal = bonds * c;
+
+          if (k < n) {
+            const bought = couponTotal / Pk;
+            bonds += bought;
+            rows.push({
+              k,
+              price: Pk,
+              coupon: couponTotal,
+              reinvest: bought,
+              bonds: bonds,
+            });
+          } else {
+            const atMaturity = bonds * F + couponTotal;
+            rows.push({
+              k,
+              price: Pk,
+              coupon: couponTotal,
+              reinvest: 0,
+              bonds: bonds,
+              atMaturity,
+            });
+          }
+        }
+
+        const last = rows[rows.length - 1];
+        const total = last.atMaturity;
+
+        document.getElementById("nPay").textContent = String(n);
+        document.getElementById("total").textContent = formatMoney(total);
+        document.getElementById("detail").textContent =
+          "Начально облигаций: " +
+          formatMoney(invest / P0) +
+          ". Прирост цены за полугодие: " +
+          formatMoney(priceStep) +
+          " ₽ за бумагу.";
+
+        let html =
+          "<table><thead><tr><th>Полугодие</th><th>Цена после шага, ₽</th><th>Купон всего, ₽</th><th>Купон → бумаг</th><th>Облигаций после</th></tr></thead><tbody>";
+        for (const r of rows) {
+          html +=
+            "<tr><td>" +
+            r.k +
+            "</td><td>" +
+            formatMoney(r.price) +
+            "</td><td>" +
+            formatMoney(r.coupon) +
+            "</td><td>" +
+            (r.reinvest ? formatMoney(r.reinvest) : "—") +
+            "</td><td>" +
+            formatMoney(r.bonds) +
+            "</td></tr>";
+        }
+        html += "</tbody></table>";
+        document.getElementById("tableWrap").innerHTML = html;
+        out.hidden = false;
+      }
+
+      document.getElementById("calc").addEventListener("click", run);
+
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, "0");
+      const d = String(today.getDate()).padStart(2, "0");
+      document.getElementById("start").value = y + "-" + m + "-" + d;
+      document.getElementById("maturity").value = (y + 5) + "-" + m + "-" + d;
+    })();
+  </script>
+</body>
+</html>
