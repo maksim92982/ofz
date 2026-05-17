@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🏎️ Turbo Race 3D</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f1e;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            position: fixed;
+            width: 100%;
+        }
+
+        /* CANVAS - ИГРОВОЕ ПОЛЕ */
+        #gameCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #1a1a3e 0%, #0f0f1e 100%);
+            z-index: 1;
+        }
+
+        /* HUD */
+        .hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .hud-card {
+            background: rgba(30, 30, 60, 0.9);
+            border: 2px solid rgba(102, 126, 234, 0.5);
+            border-radius: 12px;
+            padding: 12px 16px;
+            min-width: calc(50% - 5px);
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+        }
+
+        .hud-label {
+            font-size: 0.7rem;
+            color: #8080a0;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .hud-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .hud-value.speed { color: #feca57; }
+        .hud-value.position { color: #48dbfb; }
+        .hud-value.level { color: #ff9ff3; }
+        .hud-value.progress { color: #10b981; }
+
+        .progress-bar {
+            width: 100%;
+            height: 5px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+
+        /* КНОПКИ УПРАВЛЕНИЯ */
+        .pause-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 45px;
+            height: 45px;
+            background: rgba(30, 30, 60, 0.9);
+            border: 2px solid rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1.3rem;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 30px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .control-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(102, 126, 234, 0.3);
+            border: 3px solid rgba(102, 126, 234, 0.6);
+            border-radius: 50%;
+            color: #fff;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            transition: all 0.15s;
+        }
+
+        .control-btn:active {
+            background: rgba(102, 126, 234, 0.6);
+            transform: scale(0.95);
+        }
+
+        /* МЕНЮ */
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 15, 30, 0.98);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            gap: 20px;
+        }
+
+        .menu-overlay.hidden {
+            display: none;
+        }
+
+        .game-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ff6b6b, #feca57, #48dbfb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            padding: 18px 50px;
+            border-radius: 30px;
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .pause-menu, .result-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 15, 30, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            gap: 15px;
+        }
+
+        .pause-menu.show, .result-screen.show {
+            display: flex;
+        }
+
+        .menu-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            padding: 15px 40px;
+            border-radius: 25px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        /* DEBUG INFO */
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-family: monospace;
+            z-index: 150;
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Главное меню -->
+    <div class="menu-overlay" id="mainMenu">
+        <h1 class="game-title">🏎️ Turbo Race 3D</h1>
+        <button class="start-btn" onclick="startGame()">🚀 Начать гонку</button>
+    </div>
+
+    <!-- HUD -->
+    <div class="hud" id="hud" style="display: none;">
+        <div class="hud-card">
+            <div class="hud-label">Скорость</div>
+            <div class="hud-value speed" id="speedDisplay">0 км/ч</div>
+            <div class="progress-bar"><div class="progress-fill" id="speedBar" style="width: 0%"></div></div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Позиция</div>
+            <div class="hud-value position" id="positionDisplay">1 / 4</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Уровень</div>
+            <div class="hud-value level" id="levelDisplay">1</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Прогресс</div>
+            <div class="hud-value progress" id="progressDisplay">0%</div>
+            <div class="progress-bar"><div class="progress-fill" id="progressBar" style="width: 0%"></div></div>
+        </div>
+    </div>
+
+    <button class="pause-btn" id="pauseBtn" style="display: none;" onclick="togglePause()">⏸️</button>
+
+    <!-- Мобильное управление -->
+    <div class="mobile-controls" id="mobileControls" style="display: none;">
+        <button class="control-btn" ontouchstart="keys.left=true" ontouchend="keys.left=false" onmousedown="keys.left=true" onmouseup="keys.left=false">◀</button>
+        <button class="control-btn" ontouchstart="keys.right=true" ontouchend="keys.right=false" onmousedown="keys.right=true" onmouseup="keys.right=false">▶</button>
+    </div>
+
+    <!-- Пауза -->
+    <div class="pause-menu" id="pauseMenu">
+        <h2 class="game-title">⏸️ Пауза</h2>
+        <button class="menu-btn" onclick="togglePause()">▶️ Продолжить</button>
+        <button class="menu-btn" onclick="restartGame()" style="background: linear-gradient(135deg, #1e3c72, #2a5298);">🔄 Заново</button>
+        <button class="menu-btn" onclick="quitToMenu()" style="background: linear-gradient(135deg, #2d3436, #636e72);">🏠 Меню</button>
+    </div>
+
+    <!-- Результаты -->
+    <div class="result-screen" id="resultScreen">
+        <h2 class="game-title" id="resultTitle">🏆 Победа!</h2>
+        <div style="background: rgba(30,30,60,0.8); padding: 20px; border-radius: 15px; margin: 20px 0;">
+            <div style="margin: 10px 0;">Место: <strong id="resultPosition">1</strong></div>
+            <div style="margin: 10px 0;">Скорость: <strong id="resultSpeed">0 км/ч</strong></div>
+        </div>
+        <button class="menu-btn" id="nextLevelBtn" onclick="nextLevel()">🚀 Следующий уровень</button>
+        <button class="menu-btn" onclick="retryGame()" style="background: linear-gradient(135deg, #1e3c72, #2a5298); margin-top: 10px;">🔄 Еще раз</button>
+        <button class="menu-btn" onclick="quitToMenu()" style="background: linear-gradient(135deg, #2d3436, #636e72); margin-top: 10px;">🏠 Меню</button>
+    </div>
+
+    <!-- Debug info -->
+    <div class="debug-info" id="debugInfo">
+        Статус: меню<br>
+        Canvas: 0x0
+    </div>
+
+    <!-- CANVAS -->
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            updateDebug(`Размер: ${canvas.width}x${canvas.height}`);
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        // ==================== ИГРОВЫЕ ПАРАМЕТРЫ ====================
+        const GameConfig = {
+            roadWidth: 2000,
+            segmentLength: 200,
+            cameraHeight: 1000,
+            cameraDepth: 0.84,
+            drawDistance: 100,
+            maxSpeed: 300,
+            accel: 250,
+            decel: -100,
+            brake: -400,
+            offRoadDecel: -500
+        };
+
+        let keys = { left: false, right: false };
+        let gameState = 'menu';
+        let level = 1;
+        let player, aiCars, track, cameraZ, lastTime;
+
+        // ==================== УПРАВЛЕНИЕ ====================
+        document.addEventListener('keydown', (e) => {
+            if (gameState !== 'playing') return;
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+        });
+
+        // ==================== КЛАСС МАШИНЫ ====================
+        class Car {
+            constructor(isPlayer, color, startZ) {
+                this.isPlayer = isPlayer;
+                this.color = color;
+                this.x = 0;
+                this.z = startZ;
+                this.speed = 0;
+                this.maxSpeed = isPlayer ? GameConfig.maxSpeed : GameConfig.maxSpeed * (0.8 + Math.random() * 0.2);
+                this.width = 400;
+                this.finished = false;
+            }
+
+            update(dt) {
+                if (this.finished) return;
+
+                if (this.isPlayer) {
+                    if (keys.left) this.x -= this.speed * 0.002;
+                    if (keys.right) this.x += this.speed * 0.002;
+                    this.speed += GameConfig.accel * dt;
+                } else {
+                    if (this.speed < this.maxSpeed * 0.9) {
+                        this.speed += GameConfig.accel * 0.7 * dt;
+                    }
+                    this.x += Math.sin(Date.now() * 0.001 + this.z) * 30 * dt;
+                }
+
+                this.speed = Math.max(0, Math.min(this.maxSpeed, this.speed));
+                
+                if (Math.abs(this.x) > GameConfig.roadWidth * 0.45) {
+                    this.speed += GameConfig.offRoadDecel * dt;
+                }
+
+                this.z += this.speed * dt;
+
+                if (this.z >= track[track.length - 1].z && !this.finished) {
+                    this.finished = true;
+                }
+            }
+
+            draw() {
+                const dz = this.z - cameraZ;
+                if (dz <= 100 || dz > 10000) return;
+
+                const scale = GameConfig.cameraDepth / dz;
+                const screenX = canvas.width / 2 + this.x * scale * canvas.width / 2;
+                const screenY = canvas.height / 2 + 100;
+                const screenW = this.width * scale;
+                const screenH = screenW * 0.5;
+
+                if (screenW < 2) return;
+
+                // Тень
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.beginPath();
+                ctx.ellipse(screenX, screenY + screenH * 0.8, screenW * 0.9, screenH * 0.2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Кузов
+                ctx.fillStyle = this.color;
+                ctx.fillRect(screenX - screenW/2, screenY - screenH/2, screenW, screenH * 0.7);
+
+                // Кабина
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(screenX - screenW/3, screenY - screenH/2 - screenH*0.2, screenW*0.66, screenH*0.3);
+
+                if (this.isPlayer) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = `bold ${Math.max(12, screenW * 0.2)}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText('YOU', screenX, screenY - screenH);
+                }
+            }
+        }
+
+        // ==================== ГЕНЕРАЦИЯ ТРАССЫ ====================
+        function generateTrack() {
+            const track = [];
+            let x = 0, z = 0;
+            let curve = 0;
+
+            for (let i = 0; i < 300; i++) {
+                if (Math.random() < 0.03) {
+                    curve = (Math.random() - 0.5) * 4;
+                }
+                curve *= 0.98;
+                x += curve;
+
+                track.push({
+                    index: i,
+                    x: x,
+                    z: z,
+                    color: Math.floor(i / 3) % 2 ? 'dark' : 'light'
+                });
+
+                z += GameConfig.segmentLength;
+            }
+            return track;
+        }
+
+        // ==================== ОТРИСОВКА ДОРОГИ ====================
+        function drawRoad() {
+            const baseSegment = track.find(s => s.z <= cameraZ && s.z + GameConfig.segmentLength > cameraZ);
+            if (!baseSegment) return;
+
+            for (let n = 0; n < GameConfig.drawDistance; n++) {
+                const segment = track[(baseSegment.index + n) % track.length];
+                const dz = segment.z - cameraZ;
+                if (dz <= 0) continue;
+
+                const scale = GameConfig.cameraDepth / dz;
+                const screenX = canvas.width / 2 + segment.x * scale * canvas.width / 2;
+                const screenY = canvas.height / 2 + 100;
+                const roadW = GameConfig.roadWidth * scale * canvas.width / 2;
+
+                // Асфальт
+                ctx.fillStyle = segment.color === 'dark' ? '#2a2a4a' : '#3a3a6a';
+                ctx.fillRect(screenX - roadW, screenY, roadW * 2, 150);
+
+                // Разметка
+                if (segment.color === 'light') {
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(screenX - 5, screenY, 10, 150);
+                }
+
+                // Бордюры
+                ctx.fillStyle = '#ff4444';
+                ctx.fillRect(screenX - roadW * 1.1, screenY, roadW * 0.1, 150);
+                ctx.fillRect(screenX + roadW * 1.0, screenY, roadW * 0.1, 150);
+            }
+
+            // Небо
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height / 2 + 100);
+            gradient.addColorStop(0, '#1a1a3e');
+            gradient.addColorStop(1, '#0f0f1e');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height / 2 + 100);
+        }
+
+        // ==================== ИГРОВОЙ ЦИКЛ ====================
+        function startGame() {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('hud').style.display = 'flex';
+            document.getElementById('pauseBtn').style.display = 'flex';
+            document.getElementById('mobileControls').style.display = 'flex';
+            
+            level = 1;
+            initLevel();
+            gameState = 'playing';
+            lastTime = performance.now();
+            updateDebug('Игра запущена');
+            requestAnimationFrame(gameLoop);
+        }
+
+        function initLevel() {
+            track = generateTrack();
+            player = new Car(true, '#667eea', 100);
+            aiCars = [
+                new Car(false, '#feca57', 50),
+                new Car(false, '#48dbfb', 0),
+                new Car(false, '#ff9ff3', -50)
+            ];
+            cameraZ = player.z - 2000;
+        }
+
+        function gameLoop(timestamp) {
+            if (gameState !== 'playing') return;
+
+            const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+            lastTime = timestamp;
+
+            // Очистка canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Обновление
+            player.update(dt);
+            aiCars.forEach(car => car.update(dt));
+            cameraZ = player.z - 2000;
+
+            // Отрисовка
+            drawRoad();
+            
+            [player, ...aiCars].sort((a, b) => b.z - a.z).forEach(car => car.draw());
+
+            // HUD
+            updateHUD();
+
+            // Финиш
+            if (player.finished || aiCars.every(c => c.finished)) {
+                setTimeout(endGame, 1000);
+                return;
+            }
+
+            updateDebug(`FPS: ${Math.round(1/dt)}, Z: ${Math.round(player.z)}`);
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateHUD() {
+            const speed = Math.round(player.speed);
+            document.getElementById('speedDisplay').textContent = speed + ' км/ч';
+            document.getElementById('speedBar').style.width = (speed / GameConfig.maxSpeed * 100) + '%';
+
+            const allCars = [player, ...aiCars].sort((a, b) => b.z - a.z);
+            const pos = allCars.indexOf(player) + 1;
+            document.getElementById('positionDisplay').textContent = pos + ' / 4';
+
+            document.getElementById('levelDisplay').textContent = level;
+
+            const progress = Math.min(100, Math.round((player.z / track[track.length-1].z) * 100));
+            document.getElementById('progressDisplay').textContent = progress + '%';
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+
+        function endGame() {
+            gameState = 'result';
+            const allCars = [player, ...aiCars].sort((a, b) => b.z - a.z);
+            const pos = allCars.indexOf(player) + 1;
+
+            document.getElementById('resultTitle').textContent = pos === 1 ? '🏆 Победа!' : `🏁 Место: ${pos}`;
+            document.getElementById('resultPosition').textContent = pos;
+            document.getElementById('resultSpeed').textContent = Math.round(player.speed) + ' км/ч';
+            document.getElementById('nextLevelBtn').style.display = pos === 1 ? 'block' : 'none';
+            document.getElementById('resultScreen').classList.add('show');
+            document.getElementById('hud').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('mobileControls').style.display = 'none';
+        }
+
+        function togglePause() {
+            if (gameState === 'playing') {
+                gameState = 'paused';
+                document.getElementById('pauseMenu').classList.add('show');
+            } else if (gameState === 'paused') {
+                gameState = 'playing';
+                document.getElementById('pauseMenu').classList.remove('show');
+                lastTime = performance.now();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function restartGame() {
+            document.getElementById('pauseMenu').classList.remove('show');
+            document.getElementById('resultScreen').classList.remove('show');
+            initLevel();
+            gameState = 'playing';
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function retryGame() { restartGame(); }
+        function nextLevel() { level++; restartGame(); }
+
+        function quitToMenu() {
+            document.getElementById('pauseMenu').classList.remove('show');
+            document.getElementById('resultScreen').classList.remove('show');
+            document.getElementById('hud').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('mobileControls').style.display = 'none';
+            document.getElementById('mainMenu').classList.remove('hidden');
+            gameState = 'menu';
+        }
+
+        function updateDebug(text) {
+            const debug = document.getElementById('debugInfo');
+            debug.innerHTML = `Статус: ${gameState}<br>Canvas: ${canvas.width}x${canvas.height}<br>${text || ''}`;
+        }
+
+        // Инициализация
+        window.addEventListener('load', () => {
+            updateDebug('Загрузка завершена');
+        });
+    </script>
+</body>
+</html>
+
